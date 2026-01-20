@@ -1,0 +1,89 @@
+services:
+  # -------------------------
+  # PCP Postgres
+  # -------------------------
+  platform-postgres:
+    image: postgres:18.1-trixie
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: platform_db
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    volumes:
+      - platform-postgres-data:/var/lib/postgresql
+
+  # -------------------------
+  # AISP Postgres
+  # -------------------------
+  ai-postgres:
+    image: postgres:18.1-trixie
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ai_db
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    volumes:
+      - ai-postgres-data:/var/lib/postgresql
+
+  # -------------------------
+  # AISP Service
+  # -------------------------
+  ai-orchestrator:
+    image: ai-orchestrator:latest
+    restart: unless-stopped
+    env_file:
+      - env/aisp.env
+    environment:
+      AI_ORCHESTRATOR__HTTP_PORT: 9000
+      AI_ORCHESTRATOR__GRPC_PORT: 50051
+      AI_ORCHESTRATOR__PG_DSN: postgresql+psycopg://postgres:postgres@ai-postgres:5432/ai_db
+      AI_ORCHESTRATOR__AI_BASE_URL: "https://api.together.xyz/v1"
+    depends_on:
+      ai-postgres:
+        condition: service_healthy
+    ports:
+      # Optional host access (useful during early bring-up)
+      - "9000:9000"
+      - "50051:50051"
+
+  # -------------------------
+  # PCP Service
+  # -------------------------
+  platform-api:
+    image: platform-api:latest
+    restart: unless-stopped
+    environment:
+      RUST_LOG: info
+      PLATFORM_API__APPLICATION__HOST: 0.0.0.0
+      PLATFORM_API__APPLICATION__PORT: 8000
+      PLATFORM_API__DATABASE__USERNAME: postgres
+      PLATFORM_API__DATABASE__PASSWORD: postgres
+      PLATFORM_API__DATABASE__HOST: platform-postgres
+      PLATFORM_API__DATABASE__PORT: 5432
+      PLATFORM_API__DATABASE__NAME: platform_db
+      PLATFORM_API__ORCHESTRATOR__ENDPOINT: "http://ai-orchestrator:50051"
+      PLATFORM_API__TRACING__ENABLED: "false"
+      PLATFORM_API__TRACING__OTEL_EXPORTER_OTLP_ENDPOINT: ""
+    depends_on:
+      platform-postgres:
+        condition: service_healthy
+      ai-orchestrator:
+        condition: service_started
+    ports:
+      - "8000:8000"
+
+volumes:
+  platform-postgres-data:
+  ai-postgres-data:
