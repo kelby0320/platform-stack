@@ -57,6 +57,9 @@ services:
   
   ai-orchestrator:
     image: ai-orchestrator-dev:latest
+    build:
+      context: ../ai-services-plane
+      dockerfile: docker/ai-orchestrator.dev.Dockerfile
     restart: unless-stopped
     env_file:
       - env/aisp.env
@@ -89,6 +92,9 @@ services:
         condition: service_healthy
   platform-api:
     image: platform-api-dev:latest
+    build:
+      context: ../platform-control-plane
+      dockerfile: docker/platform-api.dev.Dockerfile
     restart: unless-stopped
     environment:
       RUST_LOG: info
